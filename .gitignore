@@ -1,0 +1,15 @@
+.cproject
+.devcontainer/
+.project
+.vscode/
+CMakeLists.txt
+build/
+debug.log
+dependencies.lock
+esp-idf-vscode-generated.gdb
+gdbinit
+managed_components/
+partitions.csv
+sdkconfig
+sdkconfig.defaults
+sdkconfig.old
