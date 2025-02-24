@@ -44,6 +44,7 @@ PJOURF+1: Prévision de changement de tarif pour le jour suivan
 #endif
 
 static const char *TAG = "ESP_ZB_TIC_LINKY";
+static spinlock_t zigbee_lock = SPINLOCK_INITIALIZER;
 
 /********************* Define functions **************************/
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
@@ -83,10 +84,10 @@ void send_data_task(void *arg)
     while (1)
     {
         TeleinfoValues *data = teleinfo_measure();
-        uint32_t current = (uint16_t)atoi(data->iinst);
-        uint32_t power = (uint16_t)atoi(data->papp);
-        ESP_LOGI(TAG, "Données mises à jour via Zigbee : PAPP=%s VA, IINST=%s A\n", data->papp, data->iinst);
-        esp_zb_lock_acquire(portMAX_DELAY);
+        float current = (float)atoi(data->iinst);
+        float power = (float)atoi(data->papp);
+        ESP_LOGI(TAG, "Données mises à jour via Zigbee : PAPP=%.1f VA, IINST=%.1f" " A\n", power, current);
+        spinlock_acquire(&zigbee_lock, portMAX_DELAY);
         esp_zb_zcl_set_attribute_val(HA_ESP_LINKY_ENDPOINT,
                                      ESP_ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
                                      ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
@@ -102,7 +103,7 @@ void send_data_task(void *arg)
                                      ESP_ZB_ZCL_ATTR_ANALOG_VALUE_PRESENT_VALUE_ID,
                                      &power,
                                      false);
-        esp_zb_lock_release();
+        spinlock_release(&zigbee_lock);
 
         // Wait 60 seconds before sending the next update
         vTaskDelay(pdMS_TO_TICKS(5000)); // 60000 ms = 1 minute
@@ -214,7 +215,7 @@ static void esp_zb_task(void *pvParameters)
     // esp_zb_analog_input_cluster_cfg_t battery_voltage = {
     //     .out_of_service = 0xFFFF,   /*!< This attribute indicates whether or not the physical input that the cluster represents is in service */
     //     .present_value = 0, /*!< This attribute indicates the current value of the input as appropriate for the cluster */
-    //     .status_flags = 0,  /*!< This attribute indicates the general “health” of the analog sensor */
+    //     .status_flags = 0,  /*!< This attribute indicates the general "health" of the analog sensor */
     // };
     // esp_zb_attribute_list_t *esp_zb_analog_input_baterry_voltage_cluster = esp_zb_analog_input_cluster_create(&battery_voltage);
 
@@ -225,12 +226,11 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_cluster_list_add_analog_output_cluster(esp_zb_cluster_list, esp_zb_electric_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_cluster_list_add_analog_value_cluster(esp_zb_cluster_list, esp_zb_power_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
-    esp_zb_endpoint_config_t endpoint_config = {
-        .endpoint = HA_ESP_LINKY_ENDPOINT,
-        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id = ESP_ZB_HA_TEMPERATURE_SENSOR_DEVICE_ID,
-        .app_device_version = 0};
-    esp_zb_ep_list_add_ep(ep_list, esp_zb_cluster_list, endpoint_config);
+    esp_zb_ep_list_add_ep(ep_list, 
+                         esp_zb_cluster_list,
+                         HA_ESP_LINKY_ENDPOINT,
+                         ESP_ZB_AF_HA_PROFILE_ID,
+                         ESP_ZB_HA_TEMPERATURE_SENSOR_DEVICE_ID);
 
     // ------------------------------ Register Device ------------------------------
     esp_zb_device_register(ep_list);
