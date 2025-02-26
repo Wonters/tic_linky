@@ -114,7 +114,7 @@ TeleinfoValues* teleinfo_measure()
     // Incrémenter le compteur pour la prochaine simulation
     counter++;
     
-    ESP_LOGI(TAG, "Simulated frame:\n%s\n", simulated_frame);
+    //ESP_LOGI(TAG, "Simulated frame:\n%s\n", simulated_frame);
     
     return &teleinfo_data;
 }

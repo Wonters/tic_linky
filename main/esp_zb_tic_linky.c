@@ -36,6 +36,7 @@ PJOURF+1: Prévision de changement de tarif pour le jour suivan
 #include "esp_zb_uart.h"
 #include "light_driver.h"
 #include "blinker.h"
+#include "esp_zigbee_core.h"
 
 // #include "esp_battery.h"
 
@@ -122,21 +123,31 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
         break;
     case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
+        if (err_status == ESP_OK)
+        {
+            ESP_LOGI(TAG, "First start");
+            esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        }
+        break;
     case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
         if (err_status == ESP_OK)
         {
+            ESP_LOGI(TAG, "Device rebooted");
             // After connexion working, handle measurments tasks
             ESP_LOGI(TAG, "Deferred driver initialization %s", deferred_driver_init() ? "failed" : "successful");
-            ESP_LOGI(TAG, "Device started up in %s factory-reset mode", esp_zb_bdb_is_factory_new() ? "" : "non");
-            if (esp_zb_bdb_is_factory_new())
-            {
-                ESP_LOGI(TAG, "Start network steering");
+            
+            esp_zb_bdb_commissioning_status_t status = esp_zb_get_bdb_commissioning_status();
+            ESP_LOGI(TAG, "Network status: %d", status);
+            
+            if (status == ESP_ZB_BDB_STATUS_NOT_ON_A_NETWORK) {
+                ESP_LOGI(TAG, "Not on network, trying to join network");
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
-            }
-            else
-            {
-                ESP_LOGI(TAG, "Device rebooted");
+            } else if (status == ESP_ZB_BDB_STATUS_ON_A_NETWORK) {
+                ESP_LOGI(TAG, "Already on network");
                 start_blinking();
+            } else {
+                ESP_LOGW(TAG, "Unexpected commissioning status: %d", status);
+                esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             }
         }
         else
@@ -147,6 +158,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         }
         break;
     case ESP_ZB_BDB_SIGNAL_STEERING:
+        ESP_LOGI(TAG, "Start network steering");
         if (err_status == ESP_OK)
         {
             esp_zb_ieee_addr_t extended_pan_id;
@@ -162,6 +174,10 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             ESP_LOGI(TAG, "Network steering was not successful (status: %s)", esp_err_to_name(err_status));
             esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
         }
+        break;
+    case ESP_ZB_NWK_SIGNAL_NO_ACTIVE_LINKS_LEFT:
+        ESP_LOGW(TAG, "Connection lost - attempting to rejoin network");
+        esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
         break;
     default:
         ESP_LOGI(TAG, "ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type,
