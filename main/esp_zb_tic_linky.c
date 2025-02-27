@@ -47,6 +47,11 @@ PJOURF+1: Prévision de changement de tarif pour le jour suivan
 static const char *TAG = "ESP_ZB_TIC_LINKY";
 static spinlock_t zigbee_lock = SPINLOCK_INITIALIZER;
 
+// Définir les priorités des tâches
+#define TASK_ZIGBEE_MAIN_PRIO       5
+#define TASK_ZIGBEE_DATA_PRIO       4
+#define TASK_TELEINFO_GEN_PRIO      3
+
 /********************* Define functions **************************/
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
 {
@@ -82,32 +87,46 @@ static void esp_app_voltage_sensor_handler(float voltage)
 
 void send_data_task(void *arg)
 {
-    while (1)
-    {
+    TickType_t last_wake_time = xTaskGetTickCount();
+    ESP_LOGI(TAG, "Send data task started");
+    while (1) {
         TeleinfoValues *data = teleinfo_measure();
-        float current = (float)atoi(data->iinst);
-        float power = (float)atoi(data->papp);
-        ESP_LOGI(TAG, "Données mises à jour via Zigbee : PAPP=%.1f VA, IINST=%.1f" " A\n", power, current);
-        spinlock_acquire(&zigbee_lock, portMAX_DELAY);
-        esp_zb_zcl_set_attribute_val(HA_ESP_LINKY_ENDPOINT,
-                                     ESP_ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
-                                     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-                                     ESP_ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID,
-                                     &current,
-                                     false);
+        float current = 0.0f;
+        float power = 0.0f;
+        
+        // Prendre le mutex avant d'accéder aux données
+        if (xSemaphoreTake(teleinfo_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            current = (float)atoi(data->iinst);
+            power = (float)atoi(data->papp);
+            xSemaphoreGive(teleinfo_mutex);
+            
+            // N'envoyer que si les valeurs sont valides
+            if (current > 0 || power > 0) {
+                ESP_LOGI(TAG, "Données mises à jour via Zigbee : PAPP=%.1f VA, IINST=%.1f A", power, current);
+                
+                // Prendre le mutex Zigbee
+                spinlock_acquire(&zigbee_lock, portMAX_DELAY);
+                
+                esp_zb_zcl_set_attribute_val(HA_ESP_LINKY_ENDPOINT,
+                                           ESP_ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+                                           ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                                           ESP_ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID,
+                                           &current,
+                                           false);
 
-
-
-        esp_zb_zcl_set_attribute_val(HA_ESP_LINKY_ENDPOINT,
-                                     ESP_ZB_ZCL_CLUSTER_ID_ANALOG_VALUE,
-                                     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-                                     ESP_ZB_ZCL_ATTR_ANALOG_VALUE_PRESENT_VALUE_ID,
-                                     &power,
-                                     false);
-        spinlock_release(&zigbee_lock);
-
-        // Wait 60 seconds before sending the next update
-        vTaskDelay(pdMS_TO_TICKS(5000)); // 60000 ms = 1 minute
+                esp_zb_zcl_set_attribute_val(HA_ESP_LINKY_ENDPOINT,
+                                           ESP_ZB_ZCL_CLUSTER_ID_ANALOG_VALUE,
+                                           ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                                           ESP_ZB_ZCL_ATTR_ANALOG_VALUE_PRESENT_VALUE_ID,
+                                           &power,
+                                           false);
+                                           
+                spinlock_release(&zigbee_lock);
+            }
+        }
+        
+        // Utiliser vTaskDelayUntil pour une temporisation plus précise
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(5000));
     }
 }
 
@@ -178,6 +197,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     case ESP_ZB_NWK_SIGNAL_NO_ACTIVE_LINKS_LEFT:
         ESP_LOGW(TAG, "Connection lost - attempting to rejoin network");
         esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        start_blinking();
         break;
     default:
         ESP_LOGI(TAG, "ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type,
@@ -252,7 +272,8 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_device_register(ep_list);
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
-    xTaskCreate(send_data_task, "send_data_task", 8096, NULL, 10, NULL);
+    xTaskCreate(send_data_task, "send_data_task", 8096, NULL, TASK_ZIGBEE_DATA_PRIO, NULL);
+    xTaskCreate(teleinfo_generator_task, "teleinfo_gen", 8096, NULL, TASK_TELEINFO_GEN_PRIO, NULL);
     esp_zb_main_loop_iteration();
 }
 
@@ -265,5 +286,5 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_zb_platform_config(&config));
     uart_init();
-    xTaskCreate(esp_zb_task, "Zigbee_main", 4096, NULL, 5, NULL);
+    xTaskCreate(esp_zb_task, "Zigbee_main", 4096, NULL, TASK_ZIGBEE_MAIN_PRIO, NULL);
 }
