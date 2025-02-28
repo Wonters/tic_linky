@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "espidf",
+      "name": "Debug",
+      "request": "launch",
+      "debugPort": 9998,
+      "logLevel": 3,
+      "mode": "manual",
+      "verifyAppBinBeforeDebug": false,
+      "tmoScaleFactor": 1,
+      "env": {
+        "CUSTOM_ENV_VAR": "SOME_VALUE"
+      }
+    }
+  ]
+}
