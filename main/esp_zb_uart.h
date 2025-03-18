@@ -25,8 +25,8 @@ typedef struct {
 #define portTICK_RATE_MS 100
 #define UART_TX_NUM UART_NUM_1  // Pour la génération (TX sur pin 1)
 #define UART_RX_NUM UART_NUM_0  // Pour la lecture (RX sur pin 0)
-#define TXD_PIN 1
-#define RXD_PIN 0
+#define TXD_PIN 24
+#define RXD_PIN 23
 
 
 #define HOOK_TELEINFO 0

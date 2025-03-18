@@ -1,11 +1,4 @@
-.cproject
-.devcontainer/
-.project
-CMakeLists.txt
+*.log
 build/
-debug.log
-esp-idf-vscode-generated.gdb
-gdbinit
 managed_components/
-sdkconfig.defaults
 sdkconfig.old
