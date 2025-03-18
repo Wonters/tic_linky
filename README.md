@@ -1,9 +1,11 @@
-| Supported Targets | ESP32-C6 | ESP32-H2 |
-| ----------------- | -------- | -------- |
+| Supported Targets |  ESP32-H2 |
+| ----------------- |  -------- |
 
-# Light Bulb Example
+# Tic Linky
 
-This test code shows how to configure Zigbee end device and use it as HA on/off light bulb.
+This code shows how to configure Zigbee end device and use it as HA sensor
+VSCode is used to dev on this project. 
+Install ESP plugin on your IDE and build the project.
 
 The ESP Zigbee SDK provides more examples and tools for productization:
 * [ESP Zigbee SDK Docs](https://docs.espressif.com/projects/esp-zigbee-sdk)
@@ -54,10 +56,10 @@ I (35534) ESP_ZB_COLOR_DIMM_LIGHT: Received message: endpoint(10), cluster(0x6),
 I (35534) ESP_ZB_COLOR_DIMM_LIGHT: Light sets to On
 ```
 
-## Light Control Functions
+## Light Indicator
 
- * By toggling the switch button (BOOT) on the ESP32-H2 board loaded with the `HA_on_off_switch` example, the LED on this board loaded with `HA_on_off_light` example will be on and off.
+ * When the sensor is pairing on the zigbee network, it blick 3 times 
 
 ## Troubleshooting
 
-For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you soon.
+For any technical queries, please open an [issue](https://github.com/Wonters/tic_linky/issues) on GitHub. I will get back to you soon.
