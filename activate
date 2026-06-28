@@ -1,0 +1,40 @@
+#!/usr/bin/env zsh
+# Active l'environnement ESP-IDF pour ha_tic_linky et lance idf.py.
+#
+# Usage :
+#   source ./activate              # active l'env dans le shell courant
+#   ./activate build               # idf.py build
+#   ./activate flash monitor       # idf.py flash monitor
+#   ./activate                     # ouvre un shell interactif avec l'env actif
+
+HA_TIC_LINKY_ROOT="${${(%):-%x}:A:h}"
+IDF_PATH="${IDF_PATH:-/Volumes/Data02/programmes/HSP_zigbee_smarthome/esp-idf}"
+PYTHON3="${PYTHON3:-/usr/local/Caskroom/miniconda/base/bin/python}"
+
+if [[ ! -f "$IDF_PATH/export.sh" ]]; then
+  echo "ESP-IDF introuvable : $IDF_PATH/export.sh" >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+if [[ ! -x "$PYTHON3" ]]; then
+  echo "Python ESP-IDF introuvable : $PYTHON3" >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+python3() { "$PYTHON3" "$@"; }
+
+source "$IDF_PATH/export.sh"
+cd "$HA_TIC_LINKY_ROOT" || return 1 2>/dev/null || exit 1
+
+if [[ "${(%):-%N}" == "$0" ]]; then
+  if (( $# )); then
+    idf.py "$@"
+    exit $?
+  fi
+
+  echo "ESP-IDF activé — projet : $HA_TIC_LINKY_ROOT"
+  echo "Exemples : idf.py build | idf.py -p PORT flash monitor"
+  exec zsh -i
+fi
+
+echo "ESP-IDF activé — projet : $HA_TIC_LINKY_ROOT"

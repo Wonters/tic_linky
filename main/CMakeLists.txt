@@ -4,5 +4,6 @@ idf_component_register(
     "esp_zb_uart.c"
     "esp_zb_tic_linky.c"
     "blinker.c"
+    "light_driver.c"
     INCLUDE_DIRS "."
 )
